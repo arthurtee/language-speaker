@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+python-multipart
+transformers
+torch
+torchaudio
+accelerate
+soundfile
+pydub
+numpy<2.0.0
+scipy
+python-dotenv
+urllib3<2.0
+datasets
+pyarrow
+sentencepiece

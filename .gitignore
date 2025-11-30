@@ -1,0 +1,31 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+.yarn/
+
+# testing
+coverage/
+
+# next.js
+.next/
+out/
+build/
+
+# python
+venv/
+__pycache__/
+*.pyc
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# misc
+.DS_Store
+*.pem
+*.log
+.vercel
+*.tsbuildinfo
+next-env.d.ts
