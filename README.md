@@ -32,7 +32,7 @@ cd language-speaker
 ### 2. Start the Backend
 ```bash
 cd backend
-pip install -r requirements.txt
+pip3 install -r requirements.txt
 python3 main.py
 ```
 
