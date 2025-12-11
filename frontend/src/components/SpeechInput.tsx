@@ -9,9 +9,10 @@ interface SpeechInputProps {
     expectedAnswers: string[];
     onCorrect: () => void;
     onIncorrect: (transcript: string) => void;
+    onStateChange?: (isListening: boolean) => void;
 }
 
-export default function SpeechInput({ language, expectedAnswers, onCorrect, onIncorrect }: SpeechInputProps) {
+export default function SpeechInput({ language, expectedAnswers, onCorrect, onIncorrect, onStateChange }: SpeechInputProps) {
     const [isListening, setIsListening] = useState(false);
     const [transcript, setTranscript] = useState('');
     const [status, setStatus] = useState<'idle' | 'listening' | 'processing' | 'success' | 'error'>('idle');
@@ -24,7 +25,18 @@ export default function SpeechInput({ language, expectedAnswers, onCorrect, onIn
 
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder.current = new MediaRecorder(stream);
+
+            // Detect supported mime type
+            let mimeType = 'audio/webm';
+            if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+                mimeType = 'audio/webm;codecs=opus';
+            } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                mimeType = 'audio/mp4';
+            }
+
+            console.log("Using MIME type:", mimeType);
+
+            mediaRecorder.current = new MediaRecorder(stream, { mimeType });
             audioChunks.current = [];
 
             mediaRecorder.current.ondataavailable = (event) => {
@@ -34,8 +46,9 @@ export default function SpeechInput({ language, expectedAnswers, onCorrect, onIn
             };
 
             mediaRecorder.current.onstop = async () => {
-                const audioBlob = new Blob(audioChunks.current, { type: 'audio/webm' });
-                console.log('Audio blob created:', audioBlob.size, 'bytes');
+                const mimeType = mediaRecorder.current?.mimeType || 'audio/webm';
+                const audioBlob = new Blob(audioChunks.current, { type: mimeType });
+                console.log('Audio blob created:', audioBlob.size, 'bytes', 'type:', mimeType);
 
                 try {
                     setStatus('processing');
@@ -47,9 +60,11 @@ export default function SpeechInput({ language, expectedAnswers, onCorrect, onIn
                     const trimmedText = text.trim().toLowerCase();
                     setTranscript(trimmedText);
 
-                    const isMatch = expectedAnswers.some(answer =>
-                        trimmedText.includes(answer.toLowerCase())
-                    );
+                    const isMatch = expectedAnswers
+                        .filter(answer => typeof answer === 'string')
+                        .some(answer =>
+                            trimmedText.includes(answer.toLowerCase())
+                        );
 
                     if (isMatch) {
                         setStatus('success');
@@ -59,12 +74,14 @@ export default function SpeechInput({ language, expectedAnswers, onCorrect, onIn
                         onIncorrect(trimmedText);
                     }
                     setIsListening(false);
+                    onStateChange?.(false);
 
                 } catch (error) {
                     console.error('Error transcribing audio:', error);
                     setStatus('error');
                     setTranscript('Error: ' + (error as Error).message);
                     setIsListening(false);
+                    onStateChange?.(false);
                 }
 
                 // Stop all tracks
@@ -73,6 +90,7 @@ export default function SpeechInput({ language, expectedAnswers, onCorrect, onIn
 
             mediaRecorder.current.start(100); // Capture data every 100ms
             setIsListening(true);
+            onStateChange?.(true);
             setStatus('listening');
             setTranscript('');
 
@@ -81,6 +99,7 @@ export default function SpeechInput({ language, expectedAnswers, onCorrect, onIn
                 if (mediaRecorder.current && mediaRecorder.current.state !== 'inactive') {
                     mediaRecorder.current.stop();
                     setIsListening(false);
+                    onStateChange?.(false);
                 }
             }, 3000);
 

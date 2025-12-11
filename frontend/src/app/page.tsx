@@ -5,29 +5,37 @@ import { Container, Title, Stack, Text, Center, Box, Loader, Alert, Button } fro
 import CountrySelector from '@/components/CountrySelector';
 import ProfessionCard from '@/components/ProfessionCard';
 import SpeechInput from '@/components/SpeechInput';
+import ModeSelector from '@/components/ModeSelector';
+import LyricsPractice from '@/components/LyricsPractice';
 import { countries, professions } from '@/data/gameData';
 import { synthesizeSpeech } from '@/lib/api';
 
 export default function Home() {
+  const [mounted, setMounted] = useState(false);
+  const [backendStatus, setBackendStatus] = useState<'checking' | 'connected' | 'error'>('checking');
+
+  // Game State
+  const [mode, setMode] = useState<'profession' | 'lyrics' | null>(null);
+
+  // Profession Mode State
   const [selectedCountry, setSelectedCountry] = useState<string | null>(null);
   const [currentProfession, setCurrentProfession] = useState<any>(null);
   const [score, setScore] = useState(0);
   const [feedback, setFeedback] = useState<string | null>(null);
-  const [mounted, setMounted] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [backendStatus, setBackendStatus] = useState<'checking' | 'connected' | 'error'>('checking');
   const [completedProfessions, setCompletedProfessions] = useState<Set<string>>(new Set());
   const [isGameComplete, setIsGameComplete] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false); // Used for Profession Mode TTS
+
+  // Lyrics Mode State
+  // No state needed for Open Mic
+
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
     audioRef.current = new Audio();
-
-    // Check backend health
     checkBackend();
-
     return () => {
       if (audioRef.current) {
         audioRef.current.pause();
@@ -48,6 +56,8 @@ export default function Home() {
       setBackendStatus('error');
     }
   };
+
+  // --- Profession Mode Logic ---
 
   const handleCountrySelect = (countryId: string) => {
     setSelectedCountry(countryId);
@@ -115,14 +125,12 @@ export default function Home() {
     setFeedback(msg);
     speak(msg);
 
-    // Update completed professions
     const newCompleted = new Set(completedProfessions);
     if (currentProfession) {
       newCompleted.add(currentProfession.id);
       setCompletedProfessions(newCompleted);
     }
 
-    // Delay moving to next profession so user sees feedback
     setTimeout(() => {
       pickRandomProfession(newCompleted);
     }, 1500);
@@ -130,25 +138,19 @@ export default function Home() {
 
   const handleIncorrect = (transcript: string) => {
     let msg = `Not quite! You said "${transcript}"`;
-
-    // Simple guidance logic
     if (transcript.length === 0) {
       msg = "Hmm, I didn't catch that. Try speaking a bit louder!";
     } else if (currentProfession && currentProfession.translations[selectedCountry!]) {
       const answers = currentProfession.translations[selectedCountry!];
       msg = `Try saying "${answers[0]}" - you can do it!`;
     }
-
     setFeedback(msg);
     speak(msg);
   };
 
   const currentCountry = countries.find((c) => c.id === selectedCountry);
 
-  // Prevent hydration mismatch by not rendering until mounted
-  if (!mounted) {
-    return null;
-  }
+  if (!mounted) return null;
 
   return (
     <Box
@@ -182,102 +184,66 @@ export default function Home() {
 
           {backendStatus === 'connected' && (
             <>
-              {!selectedCountry ? (
-                <CountrySelector selectedCountry={selectedCountry} onSelect={handleCountrySelect} />
-              ) : null}
+              {/* Mode Selection */}
+              {!mode && <ModeSelector onSelect={setMode} />}
 
-              {selectedCountry && currentCountry ? (
-                isGameComplete ? (
-                  <Stack align="center" gap="xl" className="animate-slide-up" style={{ textAlign: 'center' }}>
-                    <Title order={2} c="indigo.9" style={{ fontSize: '3rem' }}>🎉 Congratulations! 🎉</Title>
-                    <Text size="xl">You've mastered all questions in <Text span fw={700} c="indigo.7">{currentCountry.label}</Text>!</Text>
-                    <Text size="lg" fw={700}>Final Score: {score} / {professions.length}</Text>
-
-                    <Stack gap="md">
-                      <Button
-                        size="lg"
-                        variant="filled"
-                        color="yellow"
-                        onClick={() => handleCountrySelect(selectedCountry)}
-                        style={{ color: 'black' }}
-                      >
-                        Play Again ({currentCountry.label})
-                      </Button>
-                      <Button
-                        size="lg"
-                        variant="outline"
-                        color="dark"
-                        onClick={() => setSelectedCountry(null)}
-                      >
-                        Choose Another Country
-                      </Button>
+              {/* Profession Mode */}
+              {mode === 'profession' && (
+                <>
+                  {!selectedCountry ? (
+                    <Stack align="center" style={{ width: '100%' }}>
+                      <Button variant="subtle" onClick={() => setMode(null)} mb="md">← Back to Modes</Button>
+                      <CountrySelector selectedCountry={selectedCountry} onSelect={handleCountrySelect} />
                     </Stack>
-                  </Stack>
-                ) : currentProfession ? (
-                  <Stack align="center" gap="lg" className="animate-slide-up">
-                    <Text size="xl" fw={300}>
-                      Speaking <Text span fw={700} c="indigo.7">{currentCountry.label}</Text>
-                    </Text>
+                  ) : null}
 
-                    <ProfessionCard
-                      key={currentProfession.id}
-                      profession={currentProfession}
-                      countryId={selectedCountry}
-                    />
+                  {selectedCountry && currentCountry ? (
+                    isGameComplete ? (
+                      <Stack align="center" gap="xl" className="animate-slide-up" style={{ textAlign: 'center' }}>
+                        <Title order={2} c="indigo.9" style={{ fontSize: '3rem' }}>🎉 Congratulations! 🎉</Title>
+                        <Text size="xl">You've mastered all questions in <Text span fw={700} c="indigo.7">{currentCountry.label}</Text>!</Text>
+                        <Text size="lg" fw={700}>Final Score: {score} / {professions.length}</Text>
+                        <Stack gap="md">
+                          <Button size="lg" variant="filled" color="yellow" onClick={() => handleCountrySelect(selectedCountry)} style={{ color: 'black' }}>
+                            Play Again ({currentCountry.label})
+                          </Button>
+                          <Button size="lg" variant="outline" color="dark" onClick={() => setSelectedCountry(null)}>
+                            Choose Another Country
+                          </Button>
+                        </Stack>
+                      </Stack>
+                    ) : currentProfession ? (
+                      <Stack align="center" gap="lg" className="animate-slide-up">
+                        <Text size="xl" fw={300}>
+                          Speaking <Text span fw={700} c="indigo.7">{currentCountry.label}</Text>
+                        </Text>
+                        <ProfessionCard key={currentProfession.id} profession={currentProfession} countryId={selectedCountry} />
+                        <SpeechInput
+                          language={currentCountry.language}
+                          expectedAnswers={currentProfession.translations[selectedCountry]}
+                          onCorrect={handleCorrect}
+                          onIncorrect={handleIncorrect}
+                        />
+                        {feedback && (
+                          <Text size="xl" fw={700} c={feedback.includes('Correct') || feedback.includes('Awesome') || feedback.includes('Perfect') || feedback.includes('Fantastic') || feedback.includes('Amazing') || feedback.includes('Excellent') || feedback.includes('Brilliant') ? 'green.8' : 'red.4'} className="animate-bounce">
+                            {feedback}
+                          </Text>
+                        )}
+                        <Stack align="center" gap="md">
+                          <Text c="dimmed">Score: <Text span c="dark" fw={700}>{score}</Text></Text>
+                          <button onClick={() => pickRandomProfession()} style={{ padding: '8px 24px', background: 'rgba(0, 0, 0, 0.05)', border: '1px solid rgba(0, 0, 0, 0.1)', borderRadius: '12px', color: 'black', cursor: 'pointer', fontSize: '14px', transition: 'all 0.2s' }}>
+                            Skip →
+                          </button>
+                        </Stack>
+                      </Stack>
+                    ) : null
+                  ) : null}
+                </>
+              )}
 
-                    <SpeechInput
-                      language={currentCountry.language}
-                      expectedAnswers={currentProfession.translations[selectedCountry]}
-                      onCorrect={handleCorrect}
-                      onIncorrect={handleIncorrect}
-                    />
-
-                    {feedback && (
-                      <Text
-                        size="xl"
-                        fw={700}
-                        c={feedback.includes('Correct') || feedback.includes('Awesome') || feedback.includes('Perfect') || feedback.includes('Fantastic') || feedback.includes('Amazing') || feedback.includes('Excellent') || feedback.includes('Brilliant') ? 'green.8' : 'red.4'}
-                        className="animate-bounce"
-                      >
-                        {feedback}
-                      </Text>
-                    )}
-
-                    <Stack align="center" gap="md">
-                      <Text c="dimmed">
-                        Score: <Text span c="dark" fw={700}>{score}</Text>
-                      </Text>
-
-                      <button
-                        onClick={() => pickRandomProfession()}
-                        style={{
-                          padding: '8px 24px',
-                          background: 'rgba(0, 0, 0, 0.05)',
-                          border: '1px solid rgba(0, 0, 0, 0.1)',
-                          borderRadius: '12px',
-                          color: 'black',
-                          cursor: 'pointer',
-                          fontSize: '14px',
-                          transition: 'all 0.2s',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = 'rgba(0, 0, 0, 0.1)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = 'rgba(0, 0, 0, 0.05)';
-                        }}
-                      >
-                        Skip →
-                      </button>
-                    </Stack>
-                  </Stack>
-                ) : null
-              ) : (
-                !selectedCountry && (
-                  <Text size="xl" c="grey">
-                    Select a country to start practicing!
-                  </Text>
-                )
+              {/* Lyrics Mode */}
+              {mode === 'lyrics' && (
+                <LyricsPractice onBack={() => setMode(null)} />
               )}
             </>
           )}

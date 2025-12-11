@@ -1,7 +1,11 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from routers import stt, tts
+from routers import stt, tts, lyrics
 import uvicorn
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI(
     title="Language Speaker API",
@@ -18,9 +22,36 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Logging Middleware
+import time
+import logging
+
+# Configure basic logging if not already configured
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger("api")
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.time()
+    logger.info(f"Start Request: {request.method} {request.url.path}")
+    
+    try:
+        response = await call_next(request)
+        process_time = time.time() - start_time
+        logger.info(f"End Request: {request.method} {request.url.path} - Status: {response.status_code} - Time: {process_time:.4f}s")
+        return response
+    except Exception as e:
+        process_time = time.time() - start_time
+        logger.error(f"Request Failed: {request.method} {request.url.path} - Error: {e} - Time: {process_time:.4f}s")
+        raise
+
 # Include routers
 app.include_router(stt.router, prefix="/api/stt", tags=["Speech-to-Text"])
 app.include_router(tts.router, prefix="/api/tts", tags=["Text-to-Speech"])
+app.include_router(lyrics.router, prefix="/api/lyrics", tags=["Song Lyrics"])
 
 @app.get("/")
 async def root():
@@ -29,7 +60,8 @@ async def root():
         "status": "running",
         "endpoints": {
             "stt": "/api/stt/transcribe",
-            "tts": "/api/tts/synthesize"
+            "tts": "/api/tts/synthesize",
+            "lyrics": "/api/lyrics/songs"
         }
     }
 
@@ -43,7 +75,9 @@ async def health_check():
         "status": "healthy",
         "models": {
             "stt": stt_status,
-            "tts": tts_status
+            "tts": tts_status,
+            "rag": "active", 
+            "llm": "active"
         }
     }
 
