@@ -2,6 +2,8 @@
 
 This directory contains the Python FastAPI backend for the Language Speaker application.
 
+## System Design Overview
+![alt text](system-design.png)
 
 ## Setup
 
